@@ -21,12 +21,17 @@ fi
 if [[ -z "$3" ]]; then
   CLEAR_FILES="false"
 else
-  VALUE="${3,,}"
-  if [[ "$VALUE" == "true" || "$VALUE" == "false" ]]; then
-    CLEAR_FILES="$VALUE"
-  else
-    CLEAR_FILES="false"
-  fi
+  case "$3" in
+    [Tt][Rr][Uu][Ee])
+      CLEAR_FILES="true"
+      ;;
+    [Ff][Aa][Ll][Ss][Ee])
+      CLEAR_FILES="false"
+      ;;
+    *)
+      CLEAR_FILES="false"
+      ;;
+  esac
 fi
 
 # Begin Training
@@ -58,10 +63,29 @@ if [[ "$CLEAR_FILES" == "true" ]]; then
   rm -rf ./output_model
 fi
 
+echo "Running Training Safety Check With 50 Iterations"
 mlx_lm lora \
   --model "$MODEL_NAME" \
   --train \
   --data "$FINE_TUNE_FOLDER" \
+  --adapter-path ./adapters_smoke \
+  --iters 50 \
+  --batch-size 1 \
+  --learning-rate 1e-5 \
+  --max-seq-length 1024 \
+  --grad-accumulation-steps 4 \
+  --mask-prompt \
+  --save-every 50
+
+python checkNaNs.py --adapter-path=./adapters_smoke/adapters.safetensors
+rm -rf ./adapters_smoke
+
+echo "Running Full Training With 500 Iterations"
+mlx_lm lora \
+  --model "$MODEL_NAME" \
+  --train \
+  --data "$FINE_TUNE_FOLDER" \
+  --adapter-path ./adapters \
   --iters 500 \
   --batch-size 1 \
   --learning-rate 1e-5 \
@@ -69,6 +93,8 @@ mlx_lm lora \
   --grad-accumulation-steps 4 \
   --mask-prompt \
   --save-every 50
+
+python checkNaNs.py --adapter-path=./adapters/adapters.safetensors
 
 echo "Done Training"
 echo "Fusing Trained Model"
