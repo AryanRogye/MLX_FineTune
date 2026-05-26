@@ -63,6 +63,7 @@ class JsonLFormatter:
 
             role = "assistant" if msg.is_from_me else "user"
 
+
             # Merge consecutive messages from same speaker
             if chat_messages and chat_messages[-1]["role"] == role:
                 chat_messages[-1]["content"] += "\n" + text
@@ -72,5 +73,8 @@ class JsonLFormatter:
                     "role": role,
                     "content": text
                 })
+
+        while chat_messages and chat_messages[0]["role"] == "assistant":
+            chat_messages.pop(0)
 
         return chat_messages

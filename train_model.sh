@@ -63,6 +63,24 @@ if [[ "$CLEAR_FILES" == "true" ]]; then
   rm -rf ./output_model
 fi
 
+## Finding Max Sequence Length
+echo "Finding Max Sequence Length"
+
+MAX_SEQ_LENGTH=$(python gen_max_sequence.py \
+  --train-path="$FINE_TUNE_FOLDER" \
+  --mlx-model="$MODEL_NAME" | tee /dev/tty | tail -n 1)
+
+echo "Max sequence length: $MAX_SEQ_LENGTH"
+
+if ! [[ "$MAX_SEQ_LENGTH" =~ ^[0-9]+$ ]]; then
+  echo "Invalid max sequence length: $MAX_SEQ_LENGTH"
+  exit 1
+fi
+
+ROUND_TO=128
+MAX_SEQ_LENGTH=$(( ((MAX_SEQ_LENGTH + ROUND_TO - 1) / ROUND_TO) * ROUND_TO ))
+echo "Rounded max sequence length: $MAX_SEQ_LENGTH"
+
 echo "Running Training Safety Check With 50 Iterations"
 mlx_lm lora \
   --model "$MODEL_NAME" \
@@ -72,7 +90,7 @@ mlx_lm lora \
   --iters 50 \
   --batch-size 1 \
   --learning-rate 1e-5 \
-  --max-seq-length 1024 \
+  --max-seq-length "$MAX_SEQ_LENGTH" \
   --grad-accumulation-steps 4 \
   --mask-prompt \
   --save-every 50
@@ -89,7 +107,7 @@ mlx_lm lora \
   --iters 500 \
   --batch-size 1 \
   --learning-rate 1e-5 \
-  --max-seq-length 1024 \
+  --max-seq-length "$MAX_SEQ_LENGTH" \
   --grad-accumulation-steps 4 \
   --mask-prompt \
   --save-every 50
