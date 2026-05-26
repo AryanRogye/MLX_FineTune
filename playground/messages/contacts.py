@@ -15,20 +15,28 @@ def load_contacts() -> dict[str, str]:
         Contacts.CNContactEmailAddressesKey,
     ]
 
-    phone_map = {}  # cleaned number -> full name
+    contact_map: dict[str, str] = {}
 
     request = Contacts.CNContactFetchRequest.alloc().initWithKeysToFetch_(keys)
 
     def handler(contact, stop):
         name = f"{contact.givenName()} {contact.familyName()}".strip()
+
         for phone in contact.phoneNumbers():
             raw = phone.value().stringValue()
             clean = ''.join(filter(str.isdigit, raw))
-            phone_map[clean] = name
+
+            contact_map[clean] = name
+
             if len(clean) >= 10:
-                phone_map[clean[-10:]] = name
+                contact_map[clean[-10:]] = name
+
             if len(clean) >= 7:
-                phone_map[clean[-7:]] = name
+                contact_map[clean[-7:]] = name
+
+        for email in contact.emailAddresses():
+            raw = str(email.value()).lower().strip()
+            contact_map[raw] = name
 
     store.enumerateContactsWithFetchRequest_error_usingBlock_(request, None, handler)
-    return phone_map
+    return contact_map

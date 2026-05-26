@@ -59,21 +59,21 @@ def print_messages(selected_handle: Handle, messages_data: list[Message], consol
 output_path = Path(f"outputs/{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}_boundaries.jsonl")
 output_path.parent.mkdir(parents=True, exist_ok=True)
 
-def get_id() -> int:
+def get_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--id", type=int, help="ROWID of the handle to load messages for")
-    args = parser.parse_args()
+    parser.add_argument("--system-prompt", type=str, help="System prompt to use for the conversation segmentation")
+    return parser.parse_args()
 
+def get_id() -> int:
+    args = get_args()
     if args.id is not None:
         return args.id
 
     return int(console.input("Enter the ROWID of the handle you want to see messages for: "))
 
 def get_system_prompt() -> str:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--system-prompt", type=str, help="System prompt to use for the conversation segmentation")
-    args = parser.parse_args()
-
+    args = get_args()
     if args.system_prompt is not None:
         return args.system_prompt
 
@@ -129,10 +129,16 @@ print("Loading contacts...")
 contacts = load_contacts()
 print(f"Loaded {len(contacts)} contacts:")
 
+selected = selected_handle.id.lower()
+selected_digits = normalize(selected_handle.id)
+
 matching = [
     key
-    for key, value in contacts.items()
-    if value.lower() == selected_handle.id.lower()
+    for key in contacts.keys()
+    if key.lower() == selected
+    or normalize(key) == selected_digits
+    or selected_digits.endswith(normalize(key))
+    or normalize(key).endswith(selected_digits)
 ]
 
 if not len(matching) > 0:
