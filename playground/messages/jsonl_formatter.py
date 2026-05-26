@@ -24,7 +24,8 @@ class JsonLFormatter:
     """
     Formatter for converting conversations into JSONL format suitable for fine-tuning language models.
     """
-    def __init__(self, conversations: list[list[Message]]):
+    def __init__(self, conversations: list[list[Message]], system_prompt: str):
+        self.system_prompt = system_prompt
         self.conversations = conversations
 
     """
@@ -50,8 +51,8 @@ class JsonLFormatter:
 
         return "\n".join(rows)
 
-    def _conversation_to_chat_messages(self, conversation: list[Message]) -> list[dict]:
-        chat_messages: list[dict] = []
+    def _conversation_to_chat_messages(self, conversation: list[Message]) -> list[dict[str, str]]:
+        chat_messages: list[dict[str, str]] = []
 
         for msg in conversation:
             if not msg.text or msg.text == "[Attachment/No Text]":
@@ -62,7 +63,6 @@ class JsonLFormatter:
                 continue
 
             role = "assistant" if msg.is_from_me else "user"
-
 
             # Merge consecutive messages from same speaker
             if chat_messages and chat_messages[-1]["role"] == role:
@@ -77,4 +77,19 @@ class JsonLFormatter:
         while chat_messages and chat_messages[0]["role"] == "assistant":
             chat_messages.pop(0)
 
-        return chat_messages
+        if not any(m["role"] == "user" for m in chat_messages):
+            return []
+
+        if not any(m["role"] == "assistant" for m in chat_messages):
+            return []
+
+        if chat_messages[-1]["role"] != "assistant":
+            return []
+
+        return [
+            {
+                "role": "system",
+                "content": self.system_prompt
+            },
+            *chat_messages
+        ]

@@ -5,7 +5,7 @@ SELECT ROWID, id, service FROM handle LIMIT ?;
 -- last message date for a handle
 SELECT date FROM message WHERE handle_id = ? ORDER BY date DESC LIMIT 1;
 
--- last message text for a handle  
+-- last message text for a handle
 SELECT text, attributedBody FROM message WHERE handle_id = ? ORDER BY date DESC LIMIT 1;
 
 -- messages with a specific person
@@ -30,23 +30,22 @@ from rich.table import Table
 from rich.console import Console
 from datetime import datetime, timedelta
 from pathlib import Path
-import json
 
 """
 Apple's epoch starts on January 1, 2001, so we need to convert the timestamps to human-readable format
 """
 APPLE_EPOCH = datetime(2001, 1, 1)
-def apple_to_datetime(ts):
+def apple_to_datetime(ts: int) -> datetime:
     return APPLE_EPOCH + timedelta(seconds=ts / 1e9)
 
 """
 Filter Handles to where the matching.id's exist in the id's of the handles
 """
-def normalize(s):
+def normalize(s: str) -> str:
     return ''.join(filter(str.isdigit, s))
 
 
-def print_messages(selected_handle, messages_data, console):
+def print_messages(selected_handle: Handle, messages_data: list[Message], console: Console):
     messages_table = Table(title=f"Messages for {selected_handle.id}")
     messages_table.add_column("Date", style="cyan")
     messages_table.add_column("From", style="magenta")
@@ -60,16 +59,6 @@ def print_messages(selected_handle, messages_data, console):
 output_path = Path(f"outputs/{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}_boundaries.jsonl")
 output_path.parent.mkdir(parents=True, exist_ok=True)
 
-def save_boundary_result(start_index: int, end_index: int, result: dict):
-    record = {
-        "chunk_start": start_index,
-        "chunk_end": end_index,
-        "result": result,
-    }
-
-    with output_path.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(record, ensure_ascii=False) + "\n")
-
 def get_id() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--id", type=int, help="ROWID of the handle to load messages for")
@@ -79,6 +68,16 @@ def get_id() -> int:
         return args.id
 
     return int(console.input("Enter the ROWID of the handle you want to see messages for: "))
+
+def get_system_prompt() -> str:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--system-prompt", type=str, help="System prompt to use for the conversation segmentation")
+    args = parser.parse_args()
+
+    if args.system_prompt is not None:
+        return args.system_prompt
+
+    return console.input("Enter the system prompt for conversation segmentation: ")
 
 def clean_text(text: str) -> str:
     return (
@@ -106,7 +105,7 @@ handleCursor = conn.cursor()
 
 handleCursor.execute("SELECT ROWID, id, service FROM handle;")
 
-handles = []
+handles: list[Handle] = []
 for row in handleCursor.fetchall():
     handle = Handle(rowid=row[0], id=row[1], service=row[2])
     handles.append(handle)
@@ -119,6 +118,10 @@ console.print(handleTables)
 selected_id = get_id()
 
 selected_handle = next((handle for handle in handles if handle.rowid == int(selected_id)), None)
+if selected_handle is None:
+    print(f"No handle found with ROWID {selected_id}")
+    exit(0)
+
 print(f"Selected handle: {selected_handle}")
 
 # Load Contacts and find the matching contact for the selected handle.id
@@ -177,7 +180,8 @@ messages_data.sort(key=lambda m: m.date)
 segmenter = ConversationSegmenter(messages_data)
 messages_by_segment: list[list[Message]] = segmenter.begin_conversation_segmentation()
 
-formatter = JsonLFormatter(messages_by_segment)
+system_prompt = get_system_prompt()
+formatter = JsonLFormatter(messages_by_segment, system_prompt)
 jsonl_output = clean_text(formatter.format_to_jsonl())
 
 lines = jsonl_output.splitlines()
